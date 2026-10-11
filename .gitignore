@@ -1,0 +1,10 @@
+target/
+.idea/
+*.iml
+.env
+.env.*
+.worktrees/
+.superpowers/
+docs/superpowers/
+azurite-data/
+.demo/

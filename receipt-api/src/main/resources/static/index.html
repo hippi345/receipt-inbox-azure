@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Receipt inbox</title>
+  <style>
+    :root { color-scheme: light; font-family: Georgia, "Iowan Old Style", serif; }
+    body { margin: 0; background: #f4f0e6; color: #1c1915; }
+    main { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-weight: 500; font-size: 2rem; margin: 0 0 8px; }
+    p.lead { margin: 0 0 28px; color: #4d463c; }
+    section { background: #fffdf8; border: 1px solid #ddd4c4; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+    h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 12px; }
+    form, .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+    input { font: inherit; padding: 8px 10px; border: 1px solid #cbbfaa; border-radius: 8px; background: white; }
+    button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: #2f5d50; color: white; cursor: pointer; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #1c1915; color: #f4f0e6; border-radius: 8px; padding: 12px; min-height: 4rem; margin: 12px 0 0; }
+    #log { max-height: 360px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Receipt inbox</h1>
+  <p class="lead">Try the API. Log lines from the API and the worker show up below as they happen.</p>
+
+  <section>
+    <h2>Upload</h2>
+    <form id="upload">
+      <label>File <input name="file" type="file" required></label>
+      <label>Merchant <input name="merchant" value="Cafe"></label>
+      <label>Amount <input name="amount" value="9.00"></label>
+      <label>Notes <input name="notes" value="lunch"></label>
+      <button type="submit">POST /receipts</button>
+    </form>
+    <pre id="upload-result">Waiting for an upload.</pre>
+  </section>
+
+  <section>
+    <h2>One receipt</h2>
+    <div class="row">
+      <label>Id <input id="receipt-id" placeholder="paste an id"></label>
+      <button id="get-one" type="button">GET /receipts/{id}</button>
+    </div>
+    <pre id="one-result">Waiting for an id.</pre>
+  </section>
+
+  <section>
+    <h2>Recent list</h2>
+    <button id="list" type="button">GET /receipts</button>
+    <pre id="list-result">Waiting for a list.</pre>
+  </section>
+
+  <section>
+    <h2>Live log</h2>
+    <pre id="log">Connecting…</pre>
+  </section>
+</main>
+<script>
+  const log = document.querySelector("#log");
+  const source = new EventSource("/logs/stream");
+  source.onopen = () => { if (log.textContent === "Connecting…") log.textContent = ""; };
+  source.onmessage = (event) => {
+    log.textContent += (log.textContent ? "\n" : "") + event.data;
+    log.scrollTop = log.scrollHeight;
+  };
+  source.onerror = () => { log.textContent += "\n(log stream interrupted)"; };
+
+  async function show(target, response) {
+    const text = await response.text();
+    let body = text;
+    try { body = JSON.stringify(JSON.parse(text), null, 2); } catch (ignored) {}
+    target.textContent = response.status + "\n" + body;
+  }
+
+  document.querySelector("#upload").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const result = document.querySelector("#upload-result");
+    result.textContent = "Uploading…";
+    const response = await fetch("/receipts", { method: "POST", body: new FormData(event.target) });
+    await show(result, response);
+    try {
+      const json = JSON.parse(result.textContent.slice(result.textContent.indexOf("\n") + 1));
+      if (json.id) document.querySelector("#receipt-id").value = json.id;
+    } catch (ignored) {}
+  });
+
+  document.querySelector("#get-one").addEventListener("click", async () => {
+    const id = document.querySelector("#receipt-id").value.trim();
+    const result = document.querySelector("#one-result");
+    if (!id) { result.textContent = "Enter an id."; return; }
+    await show(result, await fetch("/receipts/" + encodeURIComponent(id)));
+  });
+
+  document.querySelector("#list").addEventListener("click", async () => {
+    await show(document.querySelector("#list-result"), await fetch("/receipts"));
+  });
+</script>
+</body>
+</html>
